@@ -11,6 +11,7 @@ require 'bacon'
 
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
+TESTFILES = File.dirname(__FILE__) + '/tfiles'
 require 'spectral_summing'
 
 Bacon.summary_on_exit
