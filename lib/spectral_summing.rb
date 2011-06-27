@@ -138,7 +138,7 @@ else
 	scan_nums.map {|file|	IO.readlines(file) }
 # Parse the files and put the data into spectra objects, held within the list of all spectra to combine.
 	spectras = []
-	mzXML.each_with_index do |file, i|
+	mzXMLs.each_with_index do |file, i|
 		@parse_object = Parser.new(file)
 		@parse_object.parse_by_scan_num(scan_nums[i])
 		spectras << @parse_object.spectra
