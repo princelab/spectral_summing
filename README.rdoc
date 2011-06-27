@@ -1,6 +1,6 @@
-= spectral_summing
+= ms-spectral_summing
 
-Description goes here.
+This is a utility built for summing of individual MS(n) spectra in order to bolster the signal of weak fragmentation.  It provides an API and a command-line interface for general use.
 
 == Contributing to spectral_summing
  
@@ -14,6 +14,6 @@ Description goes here.
 
 == Copyright
 
-Copyright (c) 2011 Ryan Taylor. See LICENSE.txt for
+Copyright (c) 2011 BYU. See LICENSE.txt for
 further details.
 
