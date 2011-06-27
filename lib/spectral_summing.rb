@@ -1,4 +1,5 @@
-Spectrum = Struct.new(:spectrum, :scan_num, :scan_time, :scan_range, :precursor_mass, :charge_states, :intensities, :mz_values)
+#!/usr/bin/env ruby
+Spectrum = Struct.new( :scan_num, :scan_time, :scan_range, :precursor_mass, :charge_states, :intensities, :mz_values)
 
 class Parser
 	attr_accessor :spectra
@@ -20,10 +21,9 @@ class Parser
 		require 'ms/msrun'
 		@spectra = []
 		Ms::Msrun.open(file) do |ms|
-			ms.each(:ms_level => 2) do |scan|
-				if scan_nums.include?(scan.num)
-					@spectra << Spectrum.new(scan, scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.spectrum.intensities, scan.spectrum.mzs)
-				end
+			scan_nums.map(&:to_i).map do |scan_num|
+				scan = ms.scan(scan_num)
+				@spectra << Spectrum.new(scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.spectrum.intensities, scan.spectrum.mzs)
 			end
 		end
 	end
@@ -87,7 +87,7 @@ class Combiner
 		joined_spectrum.precursor_mass = (spectrum1.precursor_mass + spectrum2.precursor_mass)/2.0
 		joined_spectrum.mz_values = arr.first
 		joined_spectrum.intensities = arr.last
-# Spectrum = Struct.new(:spectrum, :scan_num, :scan_time, :scan_range, :precursor_mass, :charge_states, :intensities, :mz_values)
+# Spectrum = Struct.new(:scan_num, :scan_time, :scan_range, :precursor_mass, :charge_states, :intensities, :mz_values)
 		joined_spectrum
 	end
 	def calculate_daltons_from_ppm(mass, ppm)
