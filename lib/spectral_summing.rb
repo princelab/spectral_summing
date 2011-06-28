@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
-Spectrum = Struct.new( :scan_num, :scan_time, :scan_range, :precursor_mass, :charge_states, :intensities, :mz_values)
+Spectrum = Struct.new( :scan_num, :scan_time, :scan_range, :precursor_mass, :charge_states, :precursor_intensity, :intensities, :mz_values)
 
 class Parser
-	attr_accessor :spectra
+	attr_accessor :spectra, :spectrum
 	def initialize(file)
 		@file = file
 	end
@@ -12,7 +12,7 @@ class Parser
 		@spectra = []
 		Ms::Msrun.open(file) do |ms|
 			ms.each(:ms_level => 2) do |scan|
-				@spectra << Spectrum.new(scan, scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.spectrum.intensities, scan.spectrum.mzs)
+				@spectra << Spectrum.new(scan, scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.precursor.intensity, scan.spectrum.intensities, scan.spectrum.mzs)
 			end
 		end
 	end
@@ -23,14 +23,14 @@ class Parser
 		Ms::Msrun.open(file) do |ms|
 			scan_nums.map(&:to_i).map do |scan_num|
 				scan = ms.scan(scan_num)
-				@spectra << Spectrum.new(scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.spectrum.intensities, scan.spectrum.mzs)
+				@spectra <<  Spectrum.new(scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.precursor.intensity, scan.spectrum.intensities, scan.spectrum.mzs)
 			end
 		end
 	end
 end
 
 class Combiner 
-	Defaults = {:bin_window => 0.1, :window_size => 4, :precursor_mass_tolerance_in_ppm =>	10, :tolerant => false}
+	Defaults = {:bin_window => 0.4, :window_size => 4, :precursor_mass_tolerance_in_ppm =>	10, :tolerant => true}
 	attr_accessor :output_spectra
 	def initialize(spectra = nil, opts = {})
 		@spectra = spectra
@@ -97,12 +97,13 @@ class Combiner
 	def to_mgf(spectrum, filename)
 		File.open(filename,'w') do |out|
 			out.puts "BEGIN IONS"
-			out.puts "TITLE=Spec1:#{spectrum.precursor_mass}_#{spectrum.charge_states.first}"
-			out.puts "CHARGE=#{spectrum.charge_states.to_s}+"
+			out.puts "TITLE=Spec1:#{spectrum.precursor_mass}_#{spectrum.charge_states}"
+			out.puts "CHARGE=1+"
+			out.puts "PEPMASS=#{spectrum.precursor_mass} #{spectrum.precursor_intensity}"
 			# our current mzML parser doesn't have scan.time implemented...
 			spectrum.mz_values.each_with_index do |mz, i|
 				intensity = spectrum.intensities[i]
-				out.puts "#{"%.5f" % mz}/t#{"%.5f" % intensity}" unless intensity == 0
+				out.puts "#{"%.5f" % mz} #{"%.5f" % intensity}" unless intensity < 1
 			end
 			out.puts "END IONS"
 		end
@@ -112,11 +113,12 @@ class Combiner
 		File.open(filename, 'w') do |out|
 			out.puts "BEGIN IONS"
 			out.puts "TITLE=Spec1:#{spectrum1.precursor_mass}_Spec2:#{spectrum2.precursor_mass}.#{spectrum1.scan_num}_#{spectrum2.scan_num}_#{spectrum1.charge_states.first}"
-			out.puts "CHARGE=#{spectrum1.charge_states.to_s}+"
+			out.puts "CHARGE=1+"
+			out.puts "PEPMASS=#{spectrum1.precursor_mass} #{spectrum1.precursor_intensity + spectrum2.precursor_intensity}"
 			# our current mzML parser doesn't have scan.time implemented...
 			results.first.each_with_index do |mz, i|
 				intensity = results.last[i]
-				out.puts "#{"%.5f" % mz}/t#{"%.5f" % intensity}" unless intensity == 0
+				out.puts "#{"%.5f" % mz} #{"%.5f" % intensity}" unless intensity < 1
 			end
 			out.puts "END IONS"
 		end
@@ -130,12 +132,12 @@ if ARGV.size == 0 or ARGV.size % 2 != 0
 	exit
 else
 	mzXMLs = []
-	scan_nums = []
+	scan_num_files = []
 	while ARGV.size > 0
 		mzXMLs << ARGV.shift
-		scan_nums << ARGV.shift
+		scan_num_files << ARGV.shift
 	end
-	scan_nums.map {|file|	IO.readlines(file) }
+	scan_nums = scan_num_files.map {|file| IO.readlines(file).each(&:chomp) }
 # Parse the files and put the data into spectra objects, held within the list of all spectra to combine.
 	spectras = []
 	mzXMLs.each_with_index do |file, i|
@@ -143,6 +145,7 @@ else
 		@parse_object.parse_by_scan_num(scan_nums[i])
 		spectras << @parse_object.spectra
 	end
+	spectras.flatten!
 	combined_spectrum = spectras.shift
 	combiner = Combiner.new(combined_spectrum)
 	spectras.each do |spectrum|
