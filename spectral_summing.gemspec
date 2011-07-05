@@ -5,12 +5,12 @@
 
 Gem::Specification.new do |s|
   s.name = %q{spectral_summing}
-  s.version = "0.0.2"
+  s.version = "0.0.3"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Ryan Taylor"]
-  s.date = %q{2011-06-28}
-  s.description = %q{TODO: longer description of your gem}
+  s.date = %q{2011-06-30}
+  s.description = %q{This is not quite built to the level I expect it will someday achieve, so please let me know if you have a suggestion.  The current interface for options requires you to change the source code.  I'll work on that, long-term, but it works right now.  CLI is given if you call the program without any arguments or the wrong number of arguments.}
   s.email = %q{ryanmt@byu.net}
   s.executables = ["spectral_summing.rb"]
   s.extra_rdoc_files = [
@@ -31,13 +31,14 @@ Gem::Specification.new do |s|
     "spec/spec_helper.rb",
     "spec/spectral_summing_spec.rb",
     "spec/tfiles/test.mzXML",
+    "spectral_summing.gemspec",
     "testing.mgf"
   ]
   s.homepage = %q{http://github.com/ryanmt/spectral_summing}
   s.licenses = ["MIT"]
   s.require_paths = ["lib"]
   s.rubygems_version = %q{1.7.2}
-  s.summary = %q{TODO: one-line summary of your gem}
+  s.summary = %q{This is a gem that should enable combination of MS/MS spectra into a combined spectrum representative of the total of all of those scans.  Currently, this can be output as an MGF file.}
 
   if s.respond_to? :specification_version then
     s.specification_version = 3

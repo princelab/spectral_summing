@@ -30,10 +30,10 @@ class Parser
 end
 
 class Combiner 
-	Defaults = {:bin_window => 0.4, :window_size => 4, :precursor_mass_tolerance_in_ppm =>	10, :tolerant => true}
+	Defaults = {:bin_window => 0.4, :window_size => 4, :precursor_mass_tolerance_in_ppm =>	10, :tolerant => true, :noise_threshold => 1, :max_charge => 6}
 	attr_accessor :output_spectra
 	def initialize(spectra = nil, opts = {})
-		@spectra = spectra
+	  @spectra = spectra
 		@opts = Defaults.merge(opts)
 	end
 	def combine(spectrum1, spectrum2)
@@ -43,7 +43,7 @@ class Combiner
 		end
 		data_arr
 	end
-	def summer(x1,y1,x2,y2) # What should this return?
+	def summer(x1,y1,x2,y2)
 		endpoints = (x1+x2).each.minmax
 		bin_width = @opts[:bin_window]
 		num_bins = ((endpoints.last - endpoints.first)/bin_width).ceil
@@ -63,7 +63,6 @@ class Combiner
 		(1..num_bins-1).each do |i|
 			data_x[i] = data_x[i-1] + bin_width 
 			check = data_x[i] + bin_width/2.0
-			#puts "check= #{check}"
 			if one.first[j]
 				while one.first[j] < check 
 					data_y[i] += one.last[j]
@@ -87,6 +86,7 @@ class Combiner
 		joined_spectrum.precursor_mass = (spectrum1.precursor_mass + spectrum2.precursor_mass)/2.0
 		joined_spectrum.mz_values = arr.first
 		joined_spectrum.intensities = arr.last
+		joined_spectrum.charge_states = (spectrum1.charge_states + spectrum2.charge_states).uniq if spectrum1.charge_states and spectrum2.charge_states
 # Spectrum = Struct.new(:scan_num, :scan_time, :scan_range, :precursor_mass, :charge_states, :intensities, :mz_values)
 		joined_spectrum
 	end
@@ -95,17 +95,25 @@ class Combiner
 		(mass-diff)..(mass+diff)
 	end
 	def to_mgf(spectrum, filename)
+		charges = spectrum.charge_states ||= (1..@opts[:max_charge]).to_a
 		File.open(filename,'w') do |out|
-			out.puts "BEGIN IONS"
-			out.puts "TITLE=Spec1:#{spectrum.precursor_mass}_#{spectrum.charge_states}"
-			out.puts "CHARGE=1+"
-			out.puts "PEPMASS=#{spectrum.precursor_mass} #{spectrum.precursor_intensity}"
-			# our current mzML parser doesn't have scan.time implemented...
-			spectrum.mz_values.each_with_index do |mz, i|
-				intensity = spectrum.intensities[i]
-				out.puts "#{"%.5f" % mz} #{"%.5f" % intensity}" unless intensity < 1
-			end
-			out.puts "END IONS"
+			charges.uniq.each do |charge|
+				out.puts "BEGIN IONS"
+				out.puts "TITLE=Spec1:#{spectrum.precursor_mass}_#{spectrum.charge_states}"
+				out.puts "CHARGE=#{charge}+"
+				out.puts "PEPMASS=#{spectrum.precursor_mass} #{spectrum.precursor_intensity}"
+				# our current mzML parser doesn't have scan.time implemented...
+				threshold = @opts[:noise_threshold]
+				outs = spectrum.mz_values.zip(spectrum.intensities)
+				while outs.size > 10000
+					outs.reject! {|a|	a.last < threshold }
+					threshold += 0.5
+				end
+				outs.each do |arr|
+					out.puts "#{"%.5f" % arr.first} #{"%.5f" % arr.last}"
+				end
+				out.puts "END IONS"
+			end #charges
 		end
 	end
 	def combine_to_mgf(spectrum1, spectrum2, filename)   # Thanks JOHN!!! Ms-Msrun 0.3.6
@@ -116,9 +124,14 @@ class Combiner
 			out.puts "CHARGE=1+"
 			out.puts "PEPMASS=#{spectrum1.precursor_mass} #{spectrum1.precursor_intensity + spectrum2.precursor_intensity}"
 			# our current mzML parser doesn't have scan.time implemented...
-			results.first.each_with_index do |mz, i|
-				intensity = results.last[i]
-				out.puts "#{"%.5f" % mz} #{"%.5f" % intensity}" unless intensity < 1
+			threshold = opts[:noise_threshold]
+			outs = spectrum.mz_values.zip(spectrum.intensities)
+			while outs.size > 10000
+				outs.reject! {|a|	a.last < threshold }
+				threshold += 0.5
+			end
+			outs.each do |arr|
+				out.puts "#{"%.5f" % arr.first} #{"%.5f" % arr.last}"
 			end
 			out.puts "END IONS"
 		end
@@ -137,7 +150,7 @@ else
 		mzXMLs << ARGV.shift
 		scan_num_files << ARGV.shift
 	end
-	scan_nums = scan_num_files.map {|file| IO.readlines(file).each(&:chomp) }
+	scan_nums = scan_num_files.map {|file| IO.readlines(file).each(&:chomp) }.reject(&:nil?)
 # Parse the files and put the data into spectra objects, held within the list of all spectra to combine.
 	spectras = []
 	mzXMLs.each_with_index do |file, i|
@@ -151,7 +164,7 @@ else
 	spectras.each do |spectrum|
 		combined_spectrum = combiner.combine_for_more_combining(combined_spectrum, spectrum)
 	end
-	combiner.to_mgf(combined_spectrum, 'combined_multiple_files.mgf')
+	combiner.to_mgf(combined_spectrum, "#{File.basename(mzXMLs.first,'.mzXML')}_combined.mgf")
 end
 
 		

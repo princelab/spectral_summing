@@ -17,8 +17,8 @@ Jeweler::Tasks.new do |gem|
   gem.name = "spectral_summing"
   gem.homepage = "http://github.com/ryanmt/spectral_summing"
   gem.license = "MIT"
-  gem.summary = %Q{TODO: one-line summary of your gem}
-  gem.description = %Q{TODO: longer description of your gem}
+  gem.summary = %Q{This is a gem that should enable combination of MS/MS spectra into a combined spectrum representative of the total of all of those scans.  Currently, this can be output as an MGF file.}
+  gem.description = %Q{This is not quite built to the level I expect it will someday achieve, so please let me know if you have a suggestion.  The current interface for options requires you to change the source code.  I'll work on that, long-term, but it works right now.  CLI is given if you call the program without any arguments or the wrong number of arguments.}
   gem.email = "ryanmt@byu.net"
   gem.authors = ["Ryan Taylor"]
   # dependencies defined in Gemfile
