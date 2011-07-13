@@ -1,4 +1,38 @@
 #!/usr/bin/env ruby
+
+require 'optparse'
+
+options = {}
+OptionParser.new do |opts|
+	opts.banner = "Usage: spectral_summing.rb input_file.mzXML scan_nums.txt input_file2.mzXML scan_nums2.txt ..."
+	opts.separator "NOTE: scan_nums.txt files must have a new line break between each integer value."
+	opts.separator 'Returns: input_file_input_file2_..._input_file(n).mgf'
+	if ARGV.size == 0
+		puts opts
+		exit
+	end
+	opts.on("-v", "--[no-]verbose", "Run verbosely") do |v|
+		options[:verbose] = v
+	end
+	opts.on("-h", "--help", "Show this message") do 
+		puts opts
+		exit
+	end
+	opts.on('-c', '--charge N', Integer, "Set the maximum charge state") do |c|
+		options[:max_charge] = c
+	end
+	opts.on("-b", "--bin_size N", Float, "Set the bin size in daltons") do |b|
+		options[:bin_size] = b
+	end
+	opts.on("-p", "--ppm N", Float, "Set the precursor mass window in ppm") do |p|
+		options[:precursor_mass_tolerance_in_ppm] = p
+	end
+	opts.on("-t", "--[no-]tolerant", "Set 'tolerant' option for precursor mass on or off (Default is on)") do |t|
+		options[:tolerant] = t
+	end
+end.parse!
+	
+
 Spectrum = Struct.new( :scan_num, :scan_time, :scan_range, :precursor_mass, :charge_states, :precursor_intensity, :intensities, :mz_values)
 
 class Parser
@@ -12,7 +46,7 @@ class Parser
 		@spectra = []
 		Ms::Msrun.open(file) do |ms|
 			ms.each(:ms_level => 2) do |scan|
-				@spectra << Spectrum.new(scan, scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.precursor.intensity, scan.spectrum.intensities, scan.spectrum.mzs)
+				@spectra << Spectrum.new(scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.precursor.intensity, scan.spectrum.intensities, scan.spectrum.mzs)
 			end
 		end
 	end
@@ -26,6 +60,9 @@ class Parser
 				@spectra <<  Spectrum.new(scan.num, scan.time, (scan.start_mz..scan.end_mz), scan.precursor.mz, scan.precursor.charge_states, scan.precursor.intensity, scan.spectrum.intensities, scan.spectrum.mzs)
 			end
 		end
+	end
+	def parse_scan_nums(file)
+		IO.readlines(file).each(&:chomp)
 	end
 end
 
@@ -79,6 +116,25 @@ class Combiner
 			end
 		end
 		[data_x, data_y]
+	end
+	def bin_for_chris(array) # arr must contain pairs of data [[x1,y1], [x2,y2], ... ]				# THIS IS STILL A WORK IN PROGRESS
+		endpoints = array.map{|arr| arr.first}.reduce(:+).each.minmax
+		#puts "__________________________ENDPOINTS_______________________________"
+		#p endpoints
+		array = array.map{|arr| arr.first.zip(arr.last)}
+		#puts "__________________________ARRAYmap zipped_______________________________"
+		#p array
+		bin_width = @opts[:bin_window]
+		num_bins = ((endpoints.last - endpoints.first)/bin_width).ceil
+		out_arr = [ ]		#[[mz_value, [arr_of_intensities]], ]
+		bottom = endpoints.last
+		top = bottom + bin_width
+		(0..num_bins-1).each do |i|
+			out_arr[i] = [ endpoints.first+i*bin_width, [] ]
+			array.each do |arr|
+				
+			end
+		end
 	end
 	def combine_for_more_combining(spectrum1, spectrum2)
 		arr = combine(spectrum1, spectrum2)
@@ -137,36 +193,35 @@ class Combiner
 		end
 	end
 end
-
-if ARGV.size == 0 or ARGV.size % 2 != 0
-	puts "Usage: #{__FILE__} input_file.mzXML scan_nums.txt input_file2.mzXML scan_nums2.txt ... "
-	puts "NOTE: scan_nums.txt files must have a new line break between each integer value."
-	puts 'Returns input_file_input_file2_..._input_file(n).mgf'
-	exit
-else
-	mzXMLs = []
-	scan_num_files = []
-	while ARGV.size > 0
-		mzXMLs << ARGV.shift
-		scan_num_files << ARGV.shift
-	end
-	scan_nums = scan_num_files.map {|file| IO.readlines(file).each(&:chomp) }.reject(&:nil?)
+if $0 == __FILE__
+	puts "Working" if options[:verbose]
+	#puts "ARGV.size = #{ARGV.size}" if options[:verbose]
+	if ARGV.size % 2 == 0
+		mzXMLs = []
+		scan_num_files = []
+		while ARGV.size > 0
+			mzXMLs << ARGV.shift
+			scan_num_files << ARGV.shift
+		end
+		scan_nums = scan_num_files.map {|file| IO.readlines(file).each(&:chomp) }.reject(&:nil?)
 # Parse the files and put the data into spectra objects, held within the list of all spectra to combine.
-	spectras = []
-	mzXMLs.each_with_index do |file, i|
-		@parse_object = Parser.new(file)
-		@parse_object.parse_by_scan_num(scan_nums[i])
-		spectras << @parse_object.spectra
+		spectras = []
+		mzXMLs.each_with_index do |file, i|
+			@parse_object = Parser.new(file)
+			@parse_object.parse_by_scan_num(scan_nums[i])
+			spectras << @parse_object.spectra
+		end
+		spectras.flatten!
+		combined_spectrum = spectras.shift
+		combiner = Combiner.new(combined_spectrum, options)
+		spectras.each do |spectrum|
+			combined_spectrum = combiner.combine_for_more_combining(combined_spectrum, spectrum)
+		end
+		combiner.to_mgf(combined_spectrum, "#{File.basename(mzXMLs.first,'.mzXML')}_combined.mgf")
+	else 
+		puts "None or not enough files given, use call `#{__FILE__} --help` for more information"
 	end
-	spectras.flatten!
-	combined_spectrum = spectras.shift
-	combiner = Combiner.new(combined_spectrum)
-	spectras.each do |spectrum|
-		combined_spectrum = combiner.combine_for_more_combining(combined_spectrum, spectrum)
-	end
-	combiner.to_mgf(combined_spectrum, "#{File.basename(mzXMLs.first,'.mzXML')}_combined.mgf")
 end
-
 		
 
 
